@@ -4,7 +4,7 @@ import sys
 pygame.init()
 WIDTH, HEIGHT = 800, 600
 display = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Платформер")
+pygame.display.set_caption("Платформер!")
 clock = pygame.time.Clock()
 FPS = 60
 
@@ -66,9 +66,9 @@ class Enemy:
         self.idle_duration = 30
         self.animation_timer = 0
         self.animation_speed = 10
-        self.idle_image = self._load_image('enemy.png')
-        self.walk1_image = self._load_image('enemy.png')
-        self.walk2_image = self._load_image('enemy.png')
+        self.idle_image = self._load_image('12.png')
+        self.walk1_image = self._load_image('12.png')
+        self.walk2_image = self._load_image('12.png')
         self.idle_image_left = pygame.transform.flip(self.idle_image, True, False)
         self.walk1_image_left = pygame.transform.flip(self.walk1_image, True, False)
         self.walk2_image_left = pygame.transform.flip(self.walk2_image, True, False)
@@ -196,7 +196,7 @@ class Game:
             pygame.Rect(600, 400, 150, 20)
         ]
         self.player = Player(100, 300)
-        self.enemy = Enemy(100, 300, 100, 400)
+        self.enemy = Enemy(100, 500, 100, 400)
         self.spikes = Spikes(700, 520)
         self.title_font = pygame.font.SysFont(None, 72)
         self.start_button = Button(300, 300, 200, 50, "Start", (100, 200, 100), (150, 255, 150))
