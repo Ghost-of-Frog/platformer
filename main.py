@@ -153,6 +153,11 @@ class Player:
         self.rect.y += self.y_speed
         self.rect.x += self.x_speed
 
+        if self.rect.left < 0:
+            self.rect.left = 0
+        if self.rect.right > WIDTH:
+            self.rect.right = WIDTH
+
         if self.invincible:
             self.invincible_timer -= 1
             if self.invincible_timer <= 0:
