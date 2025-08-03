@@ -208,7 +208,7 @@ class LevelGenerator:
         if level_num % 3 == 0:
             platforms = LevelGenerator.generate_zigzag_level(level_num, platforms, safe_zones)
             enemies = LevelGenerator.generate_enemies(level_num, platforms, safe_zones)
-            spikes = LevelGenerator.generate_spikes(level_num, platforms, safe_zones, enemies)
+            spikes = []
         else:
             platforms = LevelGenerator.generate_path_level(level_num, platforms, safe_zones)
             enemies = LevelGenerator.generate_enemies(level_num, platforms, safe_zones)
@@ -233,45 +233,54 @@ class LevelGenerator:
     def generate_path_level(level_num, platforms, safe_zones):
         num_platforms = 10 + level_num
         prev_x, prev_y = 100, HEIGHT - 150
+        min_horizontal_gap = 80
+        min_vertical_gap = 90
 
         for i in range(num_platforms):
             width = random.randint(120, 200)
             height = 20
+            attempts = 0
+            max_attempts = 50
+            placed = False
 
-            if i == 0:
-                next_x = 50
-                next_y = HEIGHT - 150
-            elif i == num_platforms - 1:
-                next_x = WIDTH - 250
-                next_y = 150
-                width = 200
-            else:
-                x_progress = i / (num_platforms - 1)
-                target_x = 50 + (WIDTH - 300) * x_progress
-                target_y = HEIGHT - 150 - (HEIGHT - 300) * x_progress * 0.7
+            while not placed and attempts < max_attempts:
+                attempts += 1
+                if i == 0:
+                    next_x = 50
+                    next_y = HEIGHT - 150
+                elif i == num_platforms - 1:
+                    next_x = WIDTH - 250
+                    next_y = 150
+                    width = 200
+                else:
+                    x_progress = i / (num_platforms - 1)
+                    target_x = 50 + (WIDTH - 300) * x_progress
+                    target_y = HEIGHT - 150 - (HEIGHT - 300) * x_progress * 0.7
 
-                x_offset = random.randint(-80, 80)
-                y_offset = random.randint(-60, 60)
+                    x_offset = random.randint(-80, 80)
+                    y_offset = random.randint(-60, 60)
 
-                next_x = max(50, min(WIDTH - width - 50, target_x + x_offset))
-                next_y = max(200, min(HEIGHT - 200, target_y + y_offset))
+                    next_x = max(50, min(WIDTH - width - 50, target_x + x_offset))
+                    next_y = max(200, min(HEIGHT - 200, target_y + y_offset))
 
-            platform = pygame.Rect(next_x, next_y, width, height)
+                platform = pygame.Rect(next_x, next_y, width, height)
 
-            valid = True
-            if i > 0:
-                prev_platform = platforms[-1]
-                if abs(next_y - prev_platform.y) > 200:
-                    valid = False
-                if next_x > prev_platform.right + 300 or next_x < prev_platform.x - 300:
-                    valid = False
 
-            if valid:
-                platforms.append(platform)
-                prev_x, prev_y = next_x, next_y
+                too_close = False
+                for existing in platforms[1:]:
+
+                    if (abs(platform.bottom - existing.top) < min_vertical_gap and
+                            ((platform.right > existing.left - min_horizontal_gap and
+                              platform.left < existing.right + min_horizontal_gap))):
+                        too_close = True
+                        break
+
+                if not too_close:
+                    platforms.append(platform)
+                    prev_x, prev_y = next_x, next_y
+                    placed = True
 
         return platforms
-
     @staticmethod
     def generate_zigzag_level(level_num, platforms, safe_zones):
         num_platforms = 10 + level_num
@@ -280,18 +289,25 @@ class LevelGenerator:
         platform_height = 20
         vertical_gap = -120
         hole_size = 250
+        min_vertical_gap = 100
+
+        prev_bottom = HEIGHT - 50
 
         for i in range(num_platforms):
             y = start_y + i * vertical_gap
-            if y < 100:
-                break
+
+            if y + platform_height > prev_bottom - min_vertical_gap:
+                y = prev_bottom - min_vertical_gap - platform_height
+                if y < 100:
+                    break
 
             if i % 2 == 0:
                 platform = pygame.Rect(0, y, WIDTH - hole_size, platform_height)
-                platforms.append(platform)
             else:
                 platform = pygame.Rect(hole_size, y, WIDTH - hole_size, platform_height)
-                platforms.append(platform)
+
+            platforms.append(platform)
+            prev_bottom = y
 
         return platforms
 
@@ -546,7 +562,7 @@ class Game:
                     self.generate_level(self.current_level)
 
 
-            self.time_warning = self.time_left < 5000  # 5 секунд
+            self.time_warning = self.time_left < 5000
 
             keys = pygame.key.get_pressed()
             self.player.x_speed = (keys[pygame.K_d] - keys[pygame.K_a]) * self.player.speed
