@@ -18,6 +18,7 @@ DARK_BG = (30, 30, 50)
 BROWN = (139, 69, 19)
 RED = (255, 0, 0)
 DARK_RED = (150, 0, 0)
+YELLOW = (255, 255, 0)
 
 
 class Button:
@@ -422,6 +423,12 @@ class Game:
         self.transition_state = None
         self.transition_speed = 8
 
+
+        self.level_time = 20000
+        self.level_start_time = 0
+        self.time_left = self.level_time
+        self.time_warning = False
+
         self.title_font = pygame.font.SysFont(None, 72)
         self.start_button = Button(300, 300, 200, 50, "Start", (100, 200, 100), (150, 255, 150))
         self.exit_button = Button(300, 400, 200, 50, "Exit", (200, 100, 100), (255, 150, 150))
@@ -448,6 +455,10 @@ class Game:
         self.player.y_speed = 0
         self.transition_state = "fade_in"
         self.transition_alpha = 255
+
+        self.level_start_time = pygame.time.get_ticks()
+        self.time_left = self.level_time
+        self.time_warning = False
 
     def draw_health(self, surface):
         for i in range(self.player.max_health):
@@ -518,6 +529,25 @@ class Game:
                 self.transition_state = None
 
         if self.state == "game" and self.transition_state is None:
+
+            elapsed = pygame.time.get_ticks() - self.level_start_time
+            self.time_left = max(0, self.level_time - elapsed)
+
+
+            if self.time_left <= 0:
+                if self.player.take_damage():
+                    if self.player.health <= 0:
+                        self.state = "game_over"
+                    else:
+
+                        self.generate_level(self.current_level)
+                else:
+
+                    self.generate_level(self.current_level)
+
+
+            self.time_warning = self.time_left < 5000  # 5 секунд
+
             keys = pygame.key.get_pressed()
             self.player.x_speed = (keys[pygame.K_d] - keys[pygame.K_a]) * self.player.speed
             self.player.update(self.platforms)
@@ -533,6 +563,15 @@ class Game:
             for spike in self.spikes_list:
                 if spike.check_collision(self.player.rect):
                     if self.player.take_damage() and self.player.health <= 0:
+                        self.state = "game_over"
+
+
+            if self.player.rect.top > HEIGHT:
+                if self.player.take_damage():
+                    self.player.rect.x = 100
+                    self.player.rect.y = HEIGHT - 110
+                    self.player.y_speed = 0
+                    if self.player.health <= 0:
                         self.state = "game_over"
 
             if self.exit_door and self.player.rect.colliderect(self.exit_door):
@@ -572,8 +611,15 @@ class Game:
 
                 self.draw_health(display)
 
+
                 level_text = self.level_font.render(f"Уровень: {self.current_level}/{self.max_levels}", True, BLACK)
                 display.blit(level_text, (WIDTH - level_text.get_width() - 20, 20))
+
+
+                seconds = max(0, self.time_left // 1000)
+                time_color = YELLOW if self.time_warning else BLACK
+                time_text = self.level_font.render(f"Время: {seconds}", True, time_color)
+                display.blit(time_text, (20, 40))
 
             if self.state == "pause":
                 overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
