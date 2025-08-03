@@ -1,5 +1,6 @@
 import pygame
 import sys
+import random
 
 pygame.init()
 WIDTH, HEIGHT = 800, 600
@@ -14,6 +15,9 @@ GREEN = (0, 255, 0)
 BLACK = (0, 0, 0)
 SKY_BLUE = (135, 206, 235)
 DARK_BG = (30, 30, 50)
+BROWN = (139, 69, 19)
+RED = (255, 0, 0)
+DARK_RED = (150, 0, 0)
 
 
 class Button:
@@ -185,26 +189,244 @@ class Player:
         return False
 
 
+class LevelGenerator:
+    @staticmethod
+    def generate_level(level_num):
+        platforms = [pygame.Rect(0, HEIGHT - 50, WIDTH, 50)]
+
+        safe_zones = [
+            pygame.Rect(0, HEIGHT - 150, 200, 100),
+            pygame.Rect(WIDTH - 200, 0, 200, 100)
+        ]
+
+        if level_num % 3 == 0:
+            platforms = LevelGenerator.generate_zigzag_level(level_num, platforms, safe_zones)
+            enemies = LevelGenerator.generate_enemies(level_num, platforms, safe_zones)
+            spikes = LevelGenerator.generate_spikes(level_num, platforms, safe_zones, enemies)
+        else:
+            platforms = LevelGenerator.generate_path_level(level_num, platforms, safe_zones)
+            enemies = LevelGenerator.generate_enemies(level_num, platforms, safe_zones)
+            spikes = LevelGenerator.generate_spikes(level_num, platforms, safe_zones, enemies)
+
+        exit_platform = LevelGenerator.ensure_exit_platform(platforms)
+        platforms.append(exit_platform)
+
+        exit_door = pygame.Rect(exit_platform.x + exit_platform.width // 2 - 25, exit_platform.y - 80, 50, 80)
+
+        return platforms, spikes, enemies, exit_door
+
+    @staticmethod
+    def ensure_exit_platform(platforms):
+        exit_platform = pygame.Rect(WIDTH - 200, 100, 200, 20)
+        for p in platforms:
+            if p.colliderect(exit_platform):
+                return p
+        return exit_platform
+
+    @staticmethod
+    def generate_path_level(level_num, platforms, safe_zones):
+        num_platforms = 10 + level_num
+        prev_x, prev_y = 100, HEIGHT - 150
+
+        for i in range(num_platforms):
+            width = random.randint(120, 200)
+            height = 20
+
+            if i == 0:
+                next_x = 50
+                next_y = HEIGHT - 150
+            elif i == num_platforms - 1:
+                next_x = WIDTH - 250
+                next_y = 150
+                width = 200
+            else:
+                x_progress = i / (num_platforms - 1)
+                target_x = 50 + (WIDTH - 300) * x_progress
+                target_y = HEIGHT - 150 - (HEIGHT - 300) * x_progress * 0.7
+
+                x_offset = random.randint(-80, 80)
+                y_offset = random.randint(-60, 60)
+
+                next_x = max(50, min(WIDTH - width - 50, target_x + x_offset))
+                next_y = max(200, min(HEIGHT - 200, target_y + y_offset))
+
+            platform = pygame.Rect(next_x, next_y, width, height)
+
+            valid = True
+            if i > 0:
+                prev_platform = platforms[-1]
+                if abs(next_y - prev_platform.y) > 200:
+                    valid = False
+                if next_x > prev_platform.right + 300 or next_x < prev_platform.x - 300:
+                    valid = False
+
+            if valid:
+                platforms.append(platform)
+                prev_x, prev_y = next_x, next_y
+
+        return platforms
+
+    @staticmethod
+    def generate_zigzag_level(level_num, platforms, safe_zones):
+        num_platforms = 10 + level_num
+        start_y = HEIGHT - 150
+        platform_width = 300
+        platform_height = 20
+        vertical_gap = -120
+        hole_size = 250
+
+        for i in range(num_platforms):
+            y = start_y + i * vertical_gap
+            if y < 100:
+                break
+
+            if i % 2 == 0:
+                platform = pygame.Rect(0, y, WIDTH - hole_size, platform_height)
+                platforms.append(platform)
+            else:
+                platform = pygame.Rect(hole_size, y, WIDTH - hole_size, platform_height)
+                platforms.append(platform)
+
+        return platforms
+
+    @staticmethod
+    def generate_spikes(level_num, platforms, safe_zones, enemies):
+        spikes = []
+        num_spikes = min(3 + level_num, 10)
+
+        enemy_platforms = []
+        for enemy in enemies:
+            for platform in platforms:
+                if abs(enemy.rect.bottom - platform.top) < 5:
+                    enemy_platforms.append(platform)
+                    break
+
+        safe_platforms = [p for p in platforms if p.x < 300 or p.x > WIDTH - 300]
+
+        if not safe_platforms:
+            safe_platforms = platforms.copy()
+
+        for _ in range(num_spikes):
+            valid_placement = False
+            attempts = 0
+
+            while not valid_placement and attempts < 50:
+                attempts += 1
+                if level_num % 3 == 0:
+                    if random.random() < 0.3:
+                        x = random.randint(100, WIDTH - 130)
+                        y = HEIGHT - 80
+                        on_ground = True
+                    else:
+                        platform = random.choice(safe_platforms)
+                        if platform in enemy_platforms or platform.width < 100:
+                            continue
+                        if random.random() < 0.5:
+                            x = platform.x + 20
+                        else:
+                            x = platform.x + platform.width - 50
+                        y = platform.y - 30
+                        on_ground = False
+                else:
+                    platform = random.choice(safe_platforms)
+                    if platform in enemy_platforms or platform.width < 100:
+                        continue
+                    if random.random() < 0.5:
+                        x = platform.x + 20
+                    else:
+                        x = platform.x + platform.width - 50
+                    y = platform.y - 30
+                    on_ground = False
+
+                spike_rect = pygame.Rect(x, y, 30, 30)
+                valid_placement = True
+
+                for zone in safe_zones:
+                    if zone.colliderect(spike_rect):
+                        valid_placement = False
+                        break
+
+                if on_ground:
+                    if x < 200 or x > WIDTH - 200:
+                        valid_placement = False
+                else:
+                    center_x = platform.x + platform.width / 2
+                    if abs(x - center_x) < 50:
+                        valid_placement = False
+
+                if valid_placement:
+                    spikes.append(Spikes(x, y))
+                    break
+
+        return spikes
+
+    @staticmethod
+    def generate_enemies(level_num, platforms, safe_zones):
+        enemies = []
+        num_enemies = min(level_num + 1, 3)
+        used_platforms = []
+
+        safe_platforms = [p for p in platforms if p.x > 300 and p.x < WIDTH - 300]
+
+        if not safe_platforms:
+            safe_platforms = platforms.copy()
+
+        for _ in range(num_enemies):
+            valid_placement = False
+            attempts = 0
+
+            while not valid_placement and attempts < 50:
+                attempts += 1
+                platform = random.choice(safe_platforms)
+
+                if platform in used_platforms or platform.width < 150:
+                    continue
+
+                left_bound = platform.x + 40
+                right_bound = platform.x + platform.width - 40
+                x = random.randint(left_bound, right_bound - 40)
+                y = platform.y - 60
+
+                enemy_rect = pygame.Rect(x, y, 40, 60)
+                valid_placement = True
+
+                for zone in safe_zones:
+                    if zone.colliderect(enemy_rect):
+                        valid_placement = False
+                        break
+
+                if valid_placement:
+                    enemies.append(Enemy(x, y, left_bound, right_bound))
+                    used_platforms.append(platform)
+                    break
+
+        return enemies
+
+
 class Game:
     def __init__(self):
         self.state = "main_menu"
-        self.platforms = [
-            pygame.Rect(0, 550, 800, 50),
-            pygame.Rect(100, 450, 200, 20),
-            pygame.Rect(400, 350, 200, 20),
-            pygame.Rect(200, 250, 100, 20),
-            pygame.Rect(600, 400, 150, 20)
-        ]
-        self.player = Player(100, 300)
-        self.enemy = Enemy(100, 500, 100, 400)
-        self.spikes = Spikes(700, 520)
+        self.player = Player(100, HEIGHT - 110)
+        self.current_level = 1
+        self.max_levels = 10
+        self.platforms = []
+        self.spikes_list = []
+        self.enemies = []
+        self.exit_door = None
+        self.transition_alpha = 0
+        self.transition_state = None
+        self.transition_speed = 8
+
         self.title_font = pygame.font.SysFont(None, 72)
         self.start_button = Button(300, 300, 200, 50, "Start", (100, 200, 100), (150, 255, 150))
         self.exit_button = Button(300, 400, 200, 50, "Exit", (200, 100, 100), (255, 150, 150))
         self.continue_button = Button(300, 300, 200, 50, "Continue", (100, 200, 100), (150, 255, 150))
         self.menu_button = Button(300, 400, 200, 50, "Main Menu", (200, 200, 100), (255, 255, 150))
         self.game_over_font = pygame.font.SysFont(None, 48)
+        self.level_font = pygame.font.SysFont(None, 36)
         self.heart_image = self._load_heart_image()
+
+        self.generate_level(1)
 
     def _load_heart_image(self):
         heart_surface = pygame.Surface((30, 30), pygame.SRCALPHA)
@@ -212,6 +434,15 @@ class Game:
         pygame.draw.circle(heart_surface, (255, 0, 0), (20, 10), 10)
         pygame.draw.polygon(heart_surface, (255, 0, 0), [(5, 15), (15, 25), (25, 15)])
         return heart_surface
+
+    def generate_level(self, level_num):
+        self.platforms, self.spikes_list, self.enemies, self.exit_door = LevelGenerator.generate_level(level_num)
+        self.player.rect.x = 100
+        self.player.rect.y = HEIGHT - 110
+        self.player.x_speed = 0
+        self.player.y_speed = 0
+        self.transition_state = "fade_in"
+        self.transition_alpha = 255
 
     def draw_health(self, surface):
         for i in range(self.player.max_health):
@@ -234,6 +465,9 @@ class Game:
                 self.start_button.check_hover(mouse_pos)
                 self.exit_button.check_hover(mouse_pos)
                 if self.start_button.is_clicked(mouse_pos, event):
+                    self.current_level = 1
+                    self.player.health = self.player.max_health
+                    self.generate_level(self.current_level)
                     self.state = "game"
                 elif self.exit_button.is_clicked(mouse_pos, event):
                     return False
@@ -257,27 +491,58 @@ class Game:
                 self.menu_button.check_hover(mouse_pos)
                 if self.menu_button.is_clicked(mouse_pos, event):
                     self.__init__()
+
+            elif self.state == "victory":
+                self.menu_button.check_hover(mouse_pos)
+                if self.menu_button.is_clicked(mouse_pos, event):
+                    self.__init__()
         return True
 
     def update(self):
-        if self.state == "game":
+        if self.transition_state == "fade_out":
+            self.transition_alpha += self.transition_speed
+            if self.transition_alpha >= 255:
+                self.transition_alpha = 255
+                self.generate_level(self.current_level)
+                self.transition_state = "fade_in"
+
+        elif self.transition_state == "fade_in":
+            self.transition_alpha -= self.transition_speed
+            if self.transition_alpha <= 0:
+                self.transition_alpha = 0
+                self.transition_state = None
+
+        if self.state == "game" and self.transition_state is None:
             keys = pygame.key.get_pressed()
             self.player.x_speed = (keys[pygame.K_d] - keys[pygame.K_a]) * self.player.speed
             self.player.update(self.platforms)
-            self.enemy.update()
 
-            if self.enemy.check_collision(self.player.rect):
-                if self.player.take_damage() and self.player.health <= 0:
-                    self.state = "game_over"
+            for enemy in self.enemies:
+                enemy.update()
 
-            if self.spikes.check_collision(self.player.rect):
-                if self.player.take_damage() and self.player.health <= 0:
-                    self.state = "game_over"
+            for enemy in self.enemies:
+                if enemy.check_collision(self.player.rect):
+                    if self.player.take_damage() and self.player.health <= 0:
+                        self.state = "game_over"
+
+            for spike in self.spikes_list:
+                if spike.check_collision(self.player.rect):
+                    if self.player.take_damage() and self.player.health <= 0:
+                        self.state = "game_over"
+
+            if self.exit_door and self.player.rect.colliderect(self.exit_door):
+                self.player.health = min(self.player.health + 1, self.player.max_health)
+                self.current_level += 1
+
+                if self.current_level > self.max_levels:
+                    self.state = "victory"
+                else:
+                    self.transition_state = "fade_out"
 
     def draw(self):
         if self.state == "main_menu":
             display.fill(DARK_BG)
-            title = self.title_font.render("Название Игры", True, (255, 255, 255))
+            title = self.title_font.render("Платформер!", True, (255, 255, 255))
             display.blit(title, (WIDTH // 2 - title.get_width() // 2, 100))
             self.start_button.draw(display)
             self.exit_button.draw(display)
@@ -286,17 +551,30 @@ class Game:
             for platform in self.platforms:
                 pygame.draw.rect(display, GREEN, platform)
 
+            if self.exit_door:
+                pygame.draw.rect(display, BROWN, self.exit_door)
+                pygame.draw.rect(display, (100, 100, 100),
+                                 (self.exit_door.x + 10, self.exit_door.y + 20, 30, 40))
+
             if self.state in ["game", "pause"]:
                 self.player.draw(display)
-                self.enemy.draw(display)
-                self.spikes.draw(display)
+
+                for enemy in self.enemies:
+                    enemy.draw(display)
+
+                for spike in self.spikes_list:
+                    spike.draw(display)
+
                 self.draw_health(display)
+
+                level_text = self.level_font.render(f"Уровень: {self.current_level}/{self.max_levels}", True, BLACK)
+                display.blit(level_text, (WIDTH - level_text.get_width() - 20, 20))
 
             if self.state == "pause":
                 overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
                 overlay.fill((0, 0, 0, 150))
                 display.blit(overlay, (0, 0))
-                pause_text = self.title_font.render("PAUSED", True, (255, 255, 255))
+                pause_text = self.title_font.render("ПАУЗА", True, (255, 255, 255))
                 display.blit(pause_text, (WIDTH // 2 - pause_text.get_width() // 2, 150))
                 self.continue_button.draw(display)
                 self.menu_button.draw(display)
@@ -305,9 +583,22 @@ class Game:
                 overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
                 overlay.fill((0, 0, 0, 150))
                 display.blit(overlay, (0, 0))
-                game_over_text = self.game_over_font.render("GAME OVER", True, (255, 0, 0))
-                display.blit(game_over_text, (WIDTH // 2 - game_over_text.get_width() // 2, HEIGHT // 2))
+                game_over_text = self.game_over_font.render("ИГРА ОКОНЧЕНА", True, (255, 0, 0))
+                display.blit(game_over_text, (WIDTH // 2 - game_over_text.get_width() // 2, HEIGHT // 2 - 50))
                 self.menu_button.draw(display)
+
+            elif self.state == "victory":
+                overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+                overlay.fill((0, 0, 0, 150))
+                display.blit(overlay, (0, 0))
+                victory_text = self.title_font.render("ПОБЕДА!", True, (0, 255, 0))
+                display.blit(victory_text, (WIDTH // 2 - victory_text.get_width() // 2, HEIGHT // 2 - 50))
+                self.menu_button.draw(display)
+
+        if self.transition_alpha > 0:
+            overlay = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+            overlay.fill((0, 0, 0, self.transition_alpha))
+            display.blit(overlay, (0, 0))
 
         pygame.display.flip()
 
