@@ -11,7 +11,7 @@ FPS = 60
 
 WHITE = (255, 255, 255)
 BLUE = (0, 0, 255)
-GREEN = (0, 255, 0)
+GREEN = (7, 46, 27)
 BLACK = (0, 0, 0)
 SKY_BLUE = (135, 206, 235)
 DARK_BG = (30, 30, 50)
@@ -19,7 +19,7 @@ BROWN = (139, 69, 19)
 RED = (255, 0, 0)
 DARK_RED = (150, 0, 0)
 YELLOW = (255, 255, 0)
-
+bg = pygame.image.load('background.png')
 
 class Button:
     def __init__(self, x, y, width, height, text, color, hover_color):
@@ -46,10 +46,18 @@ class Button:
 class Spikes:
     def __init__(self, x, y):
         self.rect = pygame.Rect(x, y, 30, 30)
+        try:
+            self.image = pygame.image.load('spike.png').convert_alpha()
+            self.image = pygame.transform.scale(self.image, (30, 30))
+        except:
+            self.image = None
         self.color = (194, 190, 190)
 
     def draw(self, surface):
-        pygame.draw.rect(surface, self.color, self.rect)
+        if self.image:
+            surface.blit(self.image, self.rect)
+        else:
+            pygame.draw.rect(surface, self.color, self.rect)
 
     def check_collision(self, player_rect):
         return self.rect.colliderect(player_rect)
@@ -71,9 +79,9 @@ class Enemy:
         self.idle_duration = 30
         self.animation_timer = 0
         self.animation_speed = 10
-        self.idle_image = self._load_image('12.png')
-        self.walk1_image = self._load_image('12.png')
-        self.walk2_image = self._load_image('12.png')
+        self.idle_image = self._load_image('enemy-2.png')
+        self.walk1_image = self._load_image('enemy.png')
+        self.walk2_image = self._load_image('enemy-2.png')
         self.idle_image_left = pygame.transform.flip(self.idle_image, True, False)
         self.walk1_image_left = pygame.transform.flip(self.walk1_image, True, False)
         self.walk2_image_left = pygame.transform.flip(self.walk2_image, True, False)
@@ -148,11 +156,30 @@ class Player:
         self.invincible = False
         self.invincible_timer = 0
         self.invincible_duration = 90
+        self.sprite1 = self._load_image("player1.png")
+        self.sprite2 = self._load_image("player2.png")
+        self.facing_right = True
+        self.current_frame = 0
+        self.animation_timer = 0
+        self.animation_speed = 8
+
+    def _load_image(self, path):
+        try:
+            return pygame.image.load(path).convert_alpha()
+        except:
+            surface = pygame.Surface((40, 60))
+            surface.fill((0, 0, 255))
+            return surface
 
     def update(self, platforms):
         self.y_speed += 0.8
         self.rect.y += self.y_speed
         self.rect.x += self.x_speed
+
+        if self.x_speed > 0:
+            self.facing_right = True
+        elif self.x_speed < 0:
+            self.facing_right = False
 
         if self.rect.left < 0:
             self.rect.left = 0
@@ -175,16 +202,25 @@ class Player:
                     self.rect.top = platform.bottom
                     self.y_speed = 0
 
+        if self.x_speed != 0 or not self.on_ground:
+            self.animation_timer += 1
+            if self.animation_timer >= self.animation_speed:
+                self.animation_timer = 0
+                self.current_frame = 1 - self.current_frame
+
     def jump(self):
         if self.on_ground:
             self.y_speed = self.jump_power
             self.on_ground = False
 
     def draw(self, surface):
-        if self.invincible and (pygame.time.get_ticks() // 200) % 2 == 0:
-            pygame.draw.rect(surface, (255, 255, 255), self.rect)
-        else:
-            pygame.draw.rect(surface, BLUE, self.rect)
+        if self.invincible and self.invincible_timer % 10 < 5:
+            return
+
+        current_sprite = self.sprite1 if self.current_frame == 0 else self.sprite2
+        if not self.facing_right:
+            current_sprite = pygame.transform.flip(current_sprite, True, False)
+        surface.blit(current_sprite, self.rect)
 
     def take_damage(self):
         if not self.invincible:
@@ -607,7 +643,7 @@ class Game:
             self.start_button.draw(display)
             self.exit_button.draw(display)
         else:
-            display.fill(SKY_BLUE)
+            display.blit(bg,(0,0))
             for platform in self.platforms:
                 pygame.draw.rect(display, GREEN, platform)
 
